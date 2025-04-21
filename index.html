@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Void Animation Fullscreen</title>
+  <link rel="shortcut icon" href="assets/images/logos/FolLogo.png" type="image/x-icon">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: rgb(35, 44, 61);
+      color: #e0e0e0;
+      font-family: 'Arial', sans-serif;
+    }
+
+    #void-animation-container {
+      position: fixed;
+      width: 100%;
+      height: 100%;
+      z-index: 999;
+      left: 0;
+      bottom: 0;
+      pointer-events: none;
+    }
+
+    #void-container, #speaker-container {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      pointer-events: auto;
+    }
+  </style>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.87.0/phaser.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+</head>
+<body>
+
+  <div id="void-animation-container">
+    <div id="speaker-container"></div>
+    <div id="void-container"></div>
+  </div>
+
+  <script>
+    const voidConfig = {
+      autofocus: false,
+      type: Phaser.AUTO,
+      parent: 'void-container',
+      transparent: true,
+      scale: {
+        mode: Phaser.Scale.RESIZE,
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+      },
+      scene: {
+        preload: preloadVoid,
+        create: createVoid,
+      }
+    };
+
+    // Posiciones específicas por animación (ajústalas como quieras)
+    const VOID_POSITIONS = {
+        'void_dormida': { offsetX: -900, offsetY: 0, scale: 1.6 },
+        'void_idleDance': { offsetX: -30, offsetY: 0, scale: 1.6 },
+        'void_play': { offsetX: 40, offsetY: 0, scale: 1.6 },
+        'void_DUERMETE': { offsetX: 70, offsetY: 0, scale: 1.6 }
+    };
+
+
+    const speakerConfig = {
+      type: Phaser.AUTO,
+      parent: 'speaker-container',
+      transparent: true,
+      scale: {
+        mode: Phaser.Scale.RESIZE,
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+      },
+      scene: {
+        preload: preloadSpeaker,
+        create: createSpeaker,
+      }
+    };
+
+    let void_sprite, speaker_sprite;
+    let currentAnimation = 'void_dormida';
+    let previousState = 'void_dormida';
+    let danceMusic;
+    let voidGame, speakerGame;
+    const FADE_DURATION = 1000;
+    const MAX_VOLUME = 0.7;
+    const VOID_SCALE = 1.6;
+    const VOID_OFFSET_X = 70;
+    const VOID_OFFSET_Y = 0;
+    const SPEAKER_SCALE = 1;
+    const SPEAKER_OFFSET_X = -280;
+    const SPEAKER_OFFSET_Y = 0;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      speakerGame = new Phaser.Game(speakerConfig);
+      voidGame = new Phaser.Game(voidConfig);
+    });
+
+    function preloadVoid() {
+      this.load.path = 'Void/';
+      this.load.atlasXML('void', 'Void.png', 'Void.xml');
+    }
+
+    function createVoid() {
+      const scene = this;
+
+      this.anims.create({
+        key: 'void_dormida',
+        frames: this.anims.generateFrameNames('void', {
+          prefix: 'VoidDormida',
+          start: 0,
+          end: 23,
+          zeroPad: 4
+        }),
+        frameRate: 24,
+        repeat: -1
+      });
+
+      this.anims.create({
+        key: 'void_play',
+        frames: this.anims.generateFrameNames('void', {
+          prefix: 'play',
+          start: 0,
+          end: 33,
+          zeroPad: 4
+        }),
+        frameRate: 24,
+        repeat: 0
+      });
+
+      this.anims.create({
+        key: 'void_idleDance',
+        frames: this.anims.generateFrameNames('void', {
+          prefix: 'idleDance',
+          start: 0,
+          end: 19,
+          zeroPad: 4
+        }),
+        frameRate: 24,
+        repeat: -1
+      });
+
+      this.anims.create({
+        key: 'void_DUERMETE',
+        frames: this.anims.generateFrameNames('void', {
+          prefix: 'DUERMETE',
+          start: 0,
+          end: 19,
+          zeroPad: 4
+        }),
+        frameRate: 24,
+        repeat: 0
+      });
+
+      void_sprite = this.add.sprite(0, 0, 'void', 'VoidDormida0000');
+      void_sprite.setOrigin(0.5, 1);
+      void_sprite.setScale(VOID_SCALE);
+      void_sprite.setInteractive();
+      void_sprite.setDepth(2); // Más alto que la bocina
+
+      positionVoidSprite.call(this);
+
+      void_sprite.on('pointerdown', () => {
+        if (currentAnimation === 'void_play' || currentAnimation === 'void_DUERMETE') return;
+
+        previousState = currentAnimation;
+
+        if (currentAnimation === 'void_idleDance') {
+          currentAnimation = 'void_DUERMETE';
+          void_sprite.play('void_DUERMETE');
+          fadeOutMusic();
+          stopSpeaker();
+          return;
+        }
+
+        currentAnimation = 'void_play';
+        void_sprite.play('void_play');
+
+        if (previousState === 'void_idleDance') {
+          fadeOutMusic();
+          stopSpeaker();
+        }
+      });
+
+      void_sprite.on('animationstart', (animation) => {
+        if (animation.key === 'void_idleDance') {
+          fadeInMusic();
+          if (speaker_sprite) speaker_sprite.play('speaker_idle');
+        }
+      });
+
+      void_sprite.on('animationcomplete', (animation) => {
+        if (animation.key === 'void_play') {
+          if (previousState === 'void_dormida') {
+            currentAnimation = 'void_idleDance';
+            void_sprite.play('void_idleDance');
+          } else {
+            currentAnimation = 'void_dormida';
+            void_sprite.play('void_dormida');
+            fadeOutMusic();
+            stopSpeaker();
+          }
+        }
+
+        if (animation.key === 'void_DUERMETE') {
+          currentAnimation = 'void_dormida';
+          void_sprite.play('void_dormida');
+        }
+      });
+
+        void_sprite.play('void_idleDance');
+        positionVoidSprite('void_idleDance');
+
+      this.scale.on('resize', () => positionVoidSprite.call(scene));
+    }
+
+    function preloadSpeaker() {
+      this.load.path = '/Void/';
+      this.load.atlasXML('speaker', 'bocina.png', 'bocina.xml');
+      this.load.path = 'Void/';
+      this.load.audio('danceMusic', 'chartEditorLoop.ogg');
+    }
+
+    function createSpeaker() {
+      speaker_sprite = this.add.sprite(0, 0, 'speaker', 'musicPlayer0009');
+      speaker_sprite.setOrigin(0.5, 1);
+      speaker_sprite.setScale(SPEAKER_SCALE);
+      speaker_sprite.setDepth(1); // Menor que Void
+
+      this.anims.create({
+        key: 'speaker_idle',
+        frames: this.anims.generateFrameNames('speaker', {
+          prefix: 'musicPlayer',
+          start: 0,
+          end: 9,
+          zeroPad: 4
+        }),
+        frameRate: 24,
+        repeat: -1
+      });
+
+      danceMusic = this.sound.add('danceMusic', {
+        volume: 0,
+        loop: true
+      });
+
+      positionSpeakersSprite.call(this);
+      this.scale.on('resize', () => positionSpeakersSprite.call(this));
+    }
+
+    function positionVoidSprite(animationKey = currentAnimation) {
+        const container = document.getElementById('void-container');
+        if (!container || !void_sprite) return;
+
+        const config = VOID_POSITIONS[animationKey] || { offsetX: 0, offsetY: 0, scale: 1 };
+        const baseX = container.clientWidth / 2 + config.offsetX;
+        const baseY = container.clientHeight - config.offsetY;
+
+        void_sprite.setScale(config.scale);
+
+        gsap.to(void_sprite, {
+            x: baseX,
+            y: baseY,
+            duration: 0.5,
+            ease: 'power2.out'
+        });
+    }
+
+
+    function positionSpeakersSprite() {
+      const container = document.getElementById('speaker-container');
+      if (!container) return;
+
+      const baseX = container.clientWidth / 2 + SPEAKER_OFFSET_X;
+      const baseY = container.clientHeight - SPEAKER_OFFSET_Y;
+
+      gsap.to(speaker_sprite, {
+        x: baseX,
+        y: baseY,
+        duration: 0.5,
+        ease: 'power2.out'
+      });
+    }
+
+    function fadeInMusic() {
+      if (!danceMusic || danceMusic.destroyed || danceMusic.isPlaying) return;
+
+      speakerGame.scene.scenes[0].tweens.add({
+        targets: danceMusic,
+        volume: MAX_VOLUME,
+        duration: FADE_DURATION,
+        ease: 'Linear',
+        onStart: () => {
+          if (!danceMusic.isPlaying) danceMusic.play();
+        }
+      });
+    }
+
+    function fadeOutMusic() {
+      if (!danceMusic || danceMusic.destroyed || !danceMusic.isPlaying) return;
+
+      speakerGame.scene.scenes[0].tweens.add({
+        targets: danceMusic,
+        volume: 0,
+        duration: FADE_DURATION,
+        ease: 'Linear',
+        onComplete: () => {
+          danceMusic.stop();
+        }
+      });
+    }
+
+    function stopSpeaker() {
+      if (!speaker_sprite) return;
+      speaker_sprite.anims.stop();
+      speaker_sprite.setFrame('musicPlayer0009');
+    }
+  </script>
+</body>
+</html>
